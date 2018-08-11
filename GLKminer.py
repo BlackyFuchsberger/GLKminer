@@ -1,24 +1,31 @@
 # -*- coding: utf-8 -*-
 """Start the GLKminer framework
 
+mongoDB
+    user: glkuser
+    pw: glkDB_18
+
 @author: Malte Persike
 """
 
-import sqlite3, os
+# Python core modules and packages
+import os
+
+# Third party modules and packages
+from pymongo import MongoClient
+
+# Local modules and packages
 from lib.db_settings import dbs
-from lib.db_helper import db_init
+from lib.fileutil import CollectFiles
+
 
 # Establish connection to database
-db = sqlite3.connect(os.path.join(dbs.url, dbs.name+dbs.ext))
-cur = db.cursor()
+client = MongoClient('mongodb://{0}:{1}@{2}:{3}/{4}'.format(dbs.username, dbs.password, dbs.host, dbs.port, dbs.name))
+db = client[dbs.name]
 
-# Make sure database is populated with tables
-if not db_init(db, dbs.tableprefix):
-    print("Nein. Nein. Nein. Nein. Nein.")
 
-# Do stuff
-#...
+filelist = CollectFiles(os.path.join('..', 'Container'), '\.pdf$')
+ImportFiles(filelist, db)
 
 # Cleanup
-db.commit()
-db.close()
+client.close()
