@@ -1,2 +1,2 @@
 # GLKminer
-Provide a framework for text mining of grant applications.
+Provide a framework for text mining grant applications.
