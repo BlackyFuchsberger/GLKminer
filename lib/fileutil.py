@@ -7,7 +7,7 @@
 import os, re
 
 
-def CollectFiles(folder, regex, subfolders=True):
+def collectFiles(folder, regex, subfolders=True):
     """Collect files matching the given regular expression in a folder and
     optionally its subfolders.
        
@@ -24,7 +24,7 @@ def CollectFiles(folder, regex, subfolders=True):
     filelist = []
     for root, dirs, files in os.walk(folder):
         for f in files:
-            if re.search(regex, f):
+            if re.search(regex, f, re.IGNORECASE):
                 filelist+= [os.path.join(root, f)]
 
     return filelist
