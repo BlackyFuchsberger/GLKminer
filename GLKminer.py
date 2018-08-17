@@ -21,6 +21,8 @@ Required Packages:
             (https://github.com/madmaze/pytesseract)
         wand: Wrapper for the ImageMagick API
             (https://github.com/dahlia/wand)
+        wordcloud: Generate word clouds from text.
+            (https://github.com/amueller/word_cloud)
     Binaries:
         ImageMagick: Open Source image conversion tool. Note that as of August
             2018, wand only supports ImageMagick 6.
@@ -37,37 +39,53 @@ Database Backend:
 
 # Python core modules and packages
 import logging, os
+
 # Preload local modules
 import lib.db_conf as dbc
 from lib.db_conf import dbconfig
+
 # Third party modules and packages
 if dbc.DB_USE_BACKEND == dbc.DB_BACKEND_MONGO:
     from pymongo import MongoClient
 elif dbc.DB_USE_BACKEND == dbc.DB_BACKEND_SQLITE:
     import sqlite3    # Currently nonfunctional
+
 # Local modules and packages
-from lib.fileutil import collectFiles
-from lib.importing import importFiles
 import lib.constants as constants
+from lib.importing import importFolder
+from lib.import_conf import DEFAULT_IMPORTOPTIONS, DEFAULT_LOGNAME
+from lib.wordcloud_helper import createWordcloud
 
 # Toggle logging
 if constants.DEFAULT_LOGTOCONSOLE:
     logging.basicConfig(level=logging.INFO)
-    logging.getLogger('pdfminer.pdfdocument').setLevel(logging.WARNING)
-    logging.getLogger('pdfminer.pdfpage').setLevel(logging.WARNING)
-    logging.getLogger('pdfminer.pdfinterp').setLevel(logging.WARNING)
-    logging.getLogger('pdfminer.converter').setLevel(logging.WARNING)
+    for logname in ['pdfminer.pdfdocument','pdfminer.pdfpage','pdfminer.pdfinterp','pdfminer.converter','pdfminer.cmapdb']:
+        logging.getLogger(logname).setLevel(logging.WARNING)
+logger = logging.getLogger(DEFAULT_LOGNAME)
+
 
 # Establish connection to database
 client = MongoClient('mongodb://{0}:{1}@{2}:{3}/{4}'.format(dbconfig.username, dbconfig.password, dbconfig.host, dbconfig.port, dbconfig.name))
 db = client[dbconfig.name]
 
-# Populate database with content from PDF files
-files = collectFiles(os.path.join('..', 'Container', '01_InnovLP'), '\.pdf$')
-importFiles(files, db.GLKM_innovativelehrprojekte)  # This needs work. An abstraction layer hiding the database would be preferrable.
 
-files = collectFiles(os.path.join('..', 'Container', '02_LFS'), '\.pdf$')
-importFiles(files, db.GLKM_lehrfreisemester)  # This needs work. An abstraction layer hiding the database would be preferrable.
+# Populate database with content from PDF files
+if False:
+    count = importFolder(folder=os.path.join('..', 'Container', '01_InnovLP'), db=db.GLKM_innovativelehrprojekte)
+    logger.info('{0} files were imported from "01_InnovLP".'.format(count))
+    
+    count = importFolder(folder=os.path.join('..', 'Container', '02_LFS'), db=db.GLKM_lehrfreisemester)
+    logger.info('{0} files were imported from "02_LFS".'.format(count))
+
+
+# Create a wordcloud
+createWordcloud(
+        '.\\mywordcloud.png',
+        os.path.join(DEFAULT_IMPORTOPTIONS.imageFolder, 'cloud_template.png'),
+        filter={'content_source': {'$regex': 'text', '$options': 'i'}},
+        coll=db.GLKM_innovativelehrprojekte
+        )
+    
 
 # Cleanup
 client.close()

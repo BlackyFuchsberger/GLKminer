@@ -4,59 +4,69 @@
 @author: Malte Persike
 """
 
-def db_init(db, tableprefix=''):
-    """Populate applications database with all required tables
+# Python core modules and packages
+import logging, os
+from datetime import datetime
+
+# Constants and other objects
+logger = logging.getLogger(__name__)
+
+
+# Function definitions
+def documentExists(record, db):
+    """Test if a document with a given set of identifiers exists in the database.
+
+    Args:
+        record (dict): a dictionary defining the document to be matched.
+        db: a database object
+
+    Returns:
+        bool: True if document exists, False otherwise
+    """
+    
+    cursor = db.find(record)
+    if cursor:
+        return cursor.limit(1).count()
+    else:
+        return False
+
+
+def storeDocument(content, source, filename, db, stopduplicate=False):
+    """Store a record in the database.
     
     Args:
-        db (sqlite3.Connection): An open sqlite3 database.
-        tableprefix (str, optional): A prefix to prepend to the names of all created tables. Defaults to an empty string.
-    
+        content (str): body of data to be stored.
+        source (str): information about the content source
+        filename (str): full path to the PDF file.
+        db: a database object.
+
     Returns:
-        bool: True if successful, False otherwise
+        bool: True if storing successful, False otherwise.
     """
-    try:
-        cur = db.cursor()
-        
-        cur.execute("""CREATE TABLE IF NOT EXISTS {0} (
-                       ID          INTEGER PRIMARY KEY AUTOINCREMENT,
-                       TYPE        INTEGER             NOT NULL,
-                       DATECREATED INTEGER             NOT NULL,
-                       NAME        TEXT,
-                       TITLE       TEXT,
-                       BODY        TEXT
-                       );""".format(tableprefix+'items'))
 
-        cur.execute("""CREATE TABLE IF NOT EXISTS {0} (
-                       ID          INTEGER PRIMARY KEY AUTOINCREMENT,
-                       NAME        TEXT,
-                       SUBTYPE     TEXT,
-                       DESCRIPTION TEXT
-                       );""".format(tableprefix+'granttypes'))
-        
-        
+    # Compile document and duplicate token
+    document = {
+            'content_name': os.path.basename(filename),
+            'content_URL': os.path.dirname(filename),
+            'filecreated_date': str(datetime.fromtimestamp(os.stat(filename).st_ctime)),
+            'filemodified_date': str(datetime.fromtimestamp(os.stat(filename).st_mtime)),
+            'imported_date': str(datetime.now()),
+            'content_source': source,
+            'content': content
+            }
+    
+    # Record for duplicate check
+    record = {key: document[key] for key in ['content_name', 'filecreated_date']}
+    
+    # Check if record exists and store if not.
+    stored = False
+    docexists = documentExists(record, db)
+    if stopduplicate and docexists:
+        logger.warning('Possible duplicate database entry found. Content was not stored in database.\nDuplicate information: ' + record)
+    elif content:
+        stored = db.insert_one(document).acknowledged
+        if docexists:
+            logger.info('Possible duplicate database entry found.\nDuplicate information: ' + record)
+        logger.info("Content for file {0} stored in database.".format(filename))
 
-        db.commit()
-        
-        cur.execute("""INSERT INTO {0} (NAME,SUBTYPE,DESCRIPTION) VALUES (
-                       'Innovatives Lehrprojekt',
-                       'Einzelprojekt',
-                       'Themenunabhängige Lehrprojekte, die im Erfolgsfall Modellcharakter für das Fach oder die Fachkultur haben.'
-                       );""".format(tableprefix+'granttypes'))
-
-        cur.execute("""INSERT INTO {0} (NAME,SUBTYPE,DESCRIPTION) VALUES (
-                       'Innovatives Lehrprojekt',
-                       'Schwerpunktprojekt',
-                       'Themengebundene Lehrprojekte, die im Erfolgsfall Modellcharakter für das Fach oder die Fachkultur haben.'
-                       );""".format(tableprefix+'granttypes'))
-
-        cur.execute("""INSERT INTO {0} (NAME,SUBTYPE,DESCRIPTION) VALUES (
-                       'Lehrfreisemester',
-                       '',
-                       'Freistellung von Regelaufgaben in der Lehre für Projekte, die einen Beitrag zur Weiterentwicklung der Lehre liefern'
-                       );""".format(tableprefix+'granttypes'))
-
-        db.commit()
-        
-        return True
-    except:
-        return False
+    return stored

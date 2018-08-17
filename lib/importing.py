@@ -1,138 +1,75 @@
 # -*- coding: utf-8 -*-
-"""Parse documents and store them in a database.
+"""Parse documents and store extracted text in a database.
 
 @author: Malte Persike
 """
 
 # Python core modules and packages
-import io, logging, os
+import logging, os
 from datetime import datetime
+
 # Third party modules and packages
-import PyPDF2
 import pytesseract as pt
-from wand.image import Image
+pt.pytesseract.tesseract_cmd = r'C:\Program Files (x86)\Tesseract-OCR\tesseract'
 from pdfminer.pdfparser import PDFParser
 from pdfminer.pdfdocument import PDFDocument
 from pdfminer.pdfpage import PDFPage
 from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
 from pdfminer.layout import LAParams
 from pdfminer.converter import PDFPageAggregator
+
 # Local modules and packages
 import lib.constants as constants
-from lib.import_helper import divine_imagefile, divine_imagefolder, parse_lt_objs
+from lib.db_helper import documentExists, storeDocument
+from lib.import_helper import parseLtObjs
 from lib.import_conf import DEFAULT_IMPORTOPTIONS, DEFAULT_LOGNAME
+from lib.pdfutil import savePDFPageAsImage, DEFAULT_RESOLUTION
+from lib.fileutil import collectFiles, divineImagefolder
 
 # Constants and other objects
+DEFAULT_OCR_LANGUAGE = 'deu'
+DEFAULT_OCR_SAVEEXTENSION = '.txt'
 logger = logging.getLogger(DEFAULT_LOGNAME)
-pt.pytesseract.tesseract_cmd = r'C:\Program Files (x86)\Tesseract-OCR\tesseract'
 
-# Function definitions
-def documentExists(record, db):
-    """Test if a document with a given set of identifiers exists in the database.
 
-    Args:
-        record (dict): a dictionary defining the document to be matched.
-        db: a database object
-
-    Returns:
-        bool: True if document exists, False otherwise
-    """
-    
-    cursor = db.find(record)
-    if cursor:
-        return cursor.limit(1).count()
-    else:
-        return False
-
-def savePDFPageAsImage(filename, pages, filetype, options=DEFAULT_IMPORTOPTIONS):
-    """Load a PDF file and save the given pages to image files.
+def runOCRonPDF(filename, tmp_folder='.', pages=[], filetype='.tif', resolution=DEFAULT_RESOLUTION):
+    """Run Tesseract OCR on a given set of pages from a PDF file. Pages are
+    first exported to image files, then OCR'ed and finally, the recognized
+    text is retrieved.
     
     Args:
-        filename (str): name of the PDF file.
-        pages (int|list): pages to save.
-        filetype (str): extension indicating the image file format.
-        options (ImportOptions): tuple holding various settings.
+        filename(str): PDF file to run OCR on.
+        tmp_folder(str, optional): A folder where temporary image files are stored.
+        filetype(str, optional): The file type of the temporary image files.
+        resolution(int, optional): The resolution of the temporary image files.
 
     Returns:
-        int: the number of saved files
+        str: the recognized text.
     """
-
-    if isinstance(pages, int):
-        pages = [pages]
-
-    imgfullpath = ''        
-    try:
-        fb = open(filename, "rb")
-    except IOError as e:
-        logger.error(e)
-    else:
-        # File opened ok. Let's save them pages
-        src_pdf = PyPDF2.PdfFileReader(fb, strict = False)
-        typestr = filetype.strip('.')
-
-        # Interate over page numbers and save those pages as single files
-        for page in pages:
-            # Create a temporary PDF object and copy the given page over.
-            dst_pdf = PyPDF2.PdfFileWriter()
-            dst_pdf.addPage(src_pdf.getPage(page))
-
-            # Write the temporary PDF to a memory stream
-            pdf_bytes = io.BytesIO()
-            dst_pdf.write(pdf_bytes)
-            pdf_bytes.seek(0)
-
-            # Convert the PDF to an image
-            img = Image(file = pdf_bytes, resolution = options.imageResolution)
-            img.type = 'grayscale'
-            img.gaussian_blur(radius=3, sigma=1)
-            img.compression = 'losslessjpeg'
-            img.convert(typestr)
-            
-            # Divine a file name, verify folder, and save the image
-            imgfolder = divine_imagefolder(filename, options, create=True)
-            imgfile = divine_imagefile(filename, number=page, count=max(pages), number_prefix='p', ext='.'+typestr)
-            imgfullpath = os.path.join(imgfolder, imgfile)
-            img.save(filename=imgfullpath)
-
-        fb.close()
-
-    return imgfullpath
-
-def storeDocument(content, source, filename, db):
-    """Store a record in the database.
+        
+    content = ''
     
-    Args:
-        content (str): body of data to be stored.
-        source (str): information about the content source
-        filename (str): full path to the PDF file.
-        db: a database object.
-
-    Returns:
-        bool: True if storing successful, False otherwise.
-    """
-
-    # Compile document and duplicate token
-    document = {
-            'content_name': os.path.basename(filename),
-            'content_URL': os.path.dirname(filename),
-            'filecreated_date': str(datetime.fromtimestamp(os.stat(filename).st_ctime)),
-            'filemodified_date': str(datetime.fromtimestamp(os.stat(filename).st_mtime)),
-            'imported_date': str(datetime.now()),
-            'content_source': source,
-            'content': content
-            }
+    imgfullpath = savePDFPageAsImage(
+            src_name=filename,
+            dst_folder=tmp_folder,
+            pages=pages,
+            filetype=filetype,
+            resolution=resolution)
     
-    record = {key: document[key] for key in ['content_name', 'filecreated_date']}
-    
-    # Check if record exists and store if not.
-    stored = False
-    if db.find_one(record):
-        logger.warning('Possible duplicate database entry found. Content was not stored in database.\nDuplicate information: ' + record)
-    elif content:
-        stored = db.insert_one(document).acknowledged   # This needs work. There should be checks to not import duplicates.
-        logger.info("Content for file {0} stored in database.".format(filename))
+    if imgfullpath:
+        if pt.pytesseract.run_tesseract(
+                input_filename=imgfullpath,
+                output_filename_base=os.path.splitext(imgfullpath)[0],
+                extension=DEFAULT_OCR_SAVEEXTENSION.strip('.'),
+                lang=DEFAULT_OCR_LANGUAGE):
+            txtfullpath = os.path.splitext(imgfullpath)[0] + DEFAULT_OCR_SAVEEXTENSION
+            with open(txtfullpath, 'r', encoding="utf8") as fr:
+                content = str(fr.read())
+            os.remove(txtfullpath)
+        os.remove(imgfullpath)
+        
+    return content
 
-    return stored
 
 def readFromPDF(filename, db, options=DEFAULT_IMPORTOPTIONS):
     """Extract contents from a PDF file using either text extraction or OCR.
@@ -147,8 +84,13 @@ def readFromPDF(filename, db, options=DEFAULT_IMPORTOPTIONS):
             False otherwise.
     """
 
+    # Build identifier record for duplicate checking. This could be user-definable.
+    record = {
+            'content_name': os.path.basename(filename), 
+            'filecreated_date': str(datetime.fromtimestamp(os.stat(filename).st_ctime))
+            }
+
     parsed_ok = False    
-    record = {'content_name': os.path.basename(filename), 'filecreated_date': str(datetime.fromtimestamp(os.stat(filename).st_ctime))}
     if not documentExists(record, db):
         # Open the given file. The file needs to be kept open as long as calls to
         # PDFParser() are made, hence the rather long file lock period.
@@ -158,7 +100,7 @@ def readFromPDF(filename, db, options=DEFAULT_IMPORTOPTIONS):
             logger.error(e, exc_info=True)
             fp = None
     
-        # Now, start text extraction
+        # Start text extraction
         if fp:
             # Create parser object to parse pdf content
             parser = PDFParser(fp)
@@ -173,7 +115,7 @@ def readFromPDF(filename, db, options=DEFAULT_IMPORTOPTIONS):
             # Create PDFResourceManager object that stores shared resources such as fonts or images
             rsrcmgr = PDFResourceManager()
             
-            # set parameters for analysis
+            # Set parameters for analysis
             laparams = LAParams()
             
             # Create a PDFDevice object which translates interpreted information into desired format
@@ -186,7 +128,14 @@ def readFromPDF(filename, db, options=DEFAULT_IMPORTOPTIONS):
             # Interpreter needs to be connected to resource manager for shared resources and device 
             interpreter = PDFPageInterpreter(rsrcmgr, device)
 
-            # Ok now that we have everything to process a pdf document, lets process it page by page
+            # We might have to save image files, so get a folder name for them.
+            img_folder = divineImagefolder(
+                basefolder=options.imageFolder,
+                filename=filename,
+                as_subfolder=options.createSubfolders,
+                create=True)
+
+            # Now that we have everything to process a pdf document, lets process it page by page
             content = ''
             page_hadextractabletext = []
             for page_number, page in enumerate(PDFPage.create_pages(document)):
@@ -203,7 +152,12 @@ def readFromPDF(filename, db, options=DEFAULT_IMPORTOPTIONS):
 
                 # Traverse all objects in the PDF file            
                 for lt_obj in layout:
-                    page_text+= parse_lt_objs([lt_obj], filename, page_number, options, [])
+                    page_text+= parseLtObjs(
+                            lt_objs=[lt_obj],
+                            src_fullpath=filename,
+                            page_number=page_number,
+                            dst_folder=img_folder,
+                            options=options)
 
                 page_hadextractabletext+= [bool(page_text)]
 
@@ -211,14 +165,12 @@ def readFromPDF(filename, db, options=DEFAULT_IMPORTOPTIONS):
                 # cases, try OCR.
                 if not page_hadextractabletext[-1]:
                     logger.info('Page {0} had no extractable text. Trying OCR.'.format(page_number+1))
-                    imgfullpath = savePDFPageAsImage(filename, page_number, '.tif')
-                    if imgfullpath:
-                        if pt.pytesseract.run_tesseract(imgfullpath, os.path.splitext(imgfullpath)[0], extension='txt', lang='deu'):
-                            txtfullpath = os.path.splitext(imgfullpath)[0]+'.txt'
-                            with open(txtfullpath, 'r', encoding="utf8") as fr:
-                                page_text = str(fr.read())
-                            os.remove(txtfullpath)
-                        os.remove(imgfullpath)
+                    page_text+= runOCRonPDF(
+                            filename=filename,
+                            tmp_folder=img_folder,
+                            pages=[page_number],
+                            resolution=options.imageResolution
+                            )
 
                 if page_text:
                     content+= '\n' + page_text
@@ -232,6 +184,7 @@ def readFromPDF(filename, db, options=DEFAULT_IMPORTOPTIONS):
 
     return parsed_ok
 
+
 def importFiles(files, db, options=DEFAULT_IMPORTOPTIONS):
     """Iterate through a list of files, extract their content and store those
     in a database.
@@ -239,6 +192,7 @@ def importFiles(files, db, options=DEFAULT_IMPORTOPTIONS):
     Args:
         files (list): a list of filenames from which to extract content.
         db: a database object.
+        options (ImportOptions): options for importing.
     
     Returns:
         int: the number of imported files
@@ -254,3 +208,19 @@ def importFiles(files, db, options=DEFAULT_IMPORTOPTIONS):
             logger.warning("'{0}' files are currently not supported.".format(ext.uppper()))
 
     return count_imported
+
+
+def importFolder(folder, db, options=DEFAULT_IMPORTOPTIONS):
+    """Iterates through a folder, extracts file content and store those
+    in a database.
+    
+    Args:
+        folder (str): a folder containing the files from which to extract content.
+        db: a database object.
+        options (ImportOptions): options for importing.
+            
+    Returns:
+        int: the number of imported files
+    """
+    files = collectFiles(folder, '\.pdf$')
+    return importFiles(files, db, options)
