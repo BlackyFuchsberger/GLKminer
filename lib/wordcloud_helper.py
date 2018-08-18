@@ -27,7 +27,7 @@ def createWordcloud(filename, maskfile, coll, filter='', content_field='content'
     stopwords = {line.strip() for line in list(open(os.path.join('.','lib','stopwords_german.txt'), encoding='utf-8')) if not comment_re.match(line)}
     
     # Retrieve and count
-    fdist = nltk.FreqDist()
+    freqs = dict()
     for doc in coll.find(filter):
         # Get a word list from the content
         text = stripChars(doc[content_field], replacewith=' ')
@@ -39,7 +39,15 @@ def createWordcloud(filename, maskfile, coll, filter='', content_field='content'
         words = [word for word in wordmap if word is not None]
         
         # Update frequencies
-        fdist.update(words)
+        fdist = nltk.FreqDist(words)
+        
+        # Normalize frequencies so that each document only contributes a
+        # cumulative frequency of 1.0.
+        for word in fdist:
+            if word in freqs:
+                freqs[word]+= fdist.freq(word)
+            else:
+                freqs[word] = fdist.freq(word)
 
     mask = np.array(Image.open(maskfile))
     wc = wordcloud.WordCloud(
@@ -47,5 +55,5 @@ def createWordcloud(filename, maskfile, coll, filter='', content_field='content'
             mask=mask,
             max_words=100,
             )
-    wc.generate_from_frequencies(dict(fdist))
+    wc.generate_from_frequencies(freqs)
     wc.to_file(filename)
