@@ -69,6 +69,8 @@ def divineImagefile(src_name='', number=None, count=None, number_prefix=None, ex
             images are extracted.
         number (int, optional): A running number for the file.
         count (int, optional): The maximun running number for all files.
+        number_prefix (str, optional): string which becomes prepended to the
+            running number
         ext (str, optional): the file type extension for the file name.
     
     Returns:
@@ -106,9 +108,11 @@ def divineImagefolder(basefolder='.', filename='', as_subfolder=False, create=Fa
     Also, create the folder if requested.
     
     Args:
-        src_name (str, optional): The full path of the PDF file from which the
-            images are extracted.
-        options (ImportOptions, optional): settings for image storing.
+        basefolder (str, optional): the root folder for the images.
+        filename (str, optional): filename of the file from which the images
+            are extracted.
+        as_subfolder (bool, optional): whether or not to create a subfolder for
+            the images with a name derived from the filename
         create (bool, optional): create the divined folder.
     
     Returns:

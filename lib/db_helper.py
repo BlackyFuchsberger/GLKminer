@@ -17,7 +17,7 @@ def documentExists(record, db):
     """Test if a document with a given set of identifiers exists in the database.
 
     Args:
-        record (dict): a dictionary defining the document to be matched.
+        record (dict): a dictionary defining the identifiers of the document to be matched.
         db: a database object
 
     Returns:
@@ -31,7 +31,7 @@ def documentExists(record, db):
         return False
 
 
-def storeDocument(content, source, filename, db, stopduplicate=False):
+def storeDocument(content, source, filename, db, skipduplicate=False):
     """Store a record in the database.
     
     Args:
@@ -39,6 +39,7 @@ def storeDocument(content, source, filename, db, stopduplicate=False):
         source (str): information about the content source
         filename (str): full path to the PDF file.
         db: a database object.
+        skipduplicate (bool, optional): whether to skip possible duplicates.
 
     Returns:
         bool: True if storing successful, False otherwise.
@@ -61,7 +62,7 @@ def storeDocument(content, source, filename, db, stopduplicate=False):
     # Check if record exists and store if not.
     stored = False
     docexists = documentExists(record, db)
-    if stopduplicate and docexists:
+    if skipduplicate and docexists:
         logger.warning('Possible duplicate database entry found. Content was not stored in database.\nDuplicate information: ' + record)
     elif content:
         stored = db.insert_one(document).acknowledged

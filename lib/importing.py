@@ -40,6 +40,7 @@ def runOCRonPDF(filename, tmp_folder='.', pages=[], filetype='.tif', resolution=
     Args:
         filename(str): PDF file to run OCR on.
         tmp_folder(str, optional): A folder where temporary image files are stored.
+        pages (list, optional): which pages to run OCR on.
         filetype(str, optional): The file type of the temporary image files.
         resolution(int, optional): The resolution of the temporary image files.
 
@@ -77,7 +78,7 @@ def readFromPDF(filename, db, options=DEFAULT_IMPORTOPTIONS):
     Args:
         filename (str): filename from which to extract content.
         db: a database object.
-        options (ImportOptions): tuple holding various settings.
+        options (ImportOptions, optional): tuple holding various settings.
 
     Returns:
         bool: True if at least one character of text was imported,

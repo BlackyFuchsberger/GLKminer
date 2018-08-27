@@ -18,13 +18,15 @@ logger = logging.getLogger(DEFAULT_LOGNAME)
 
 # Function definitions
 def saveLtImage (lt_image, src_fullpath, dst_folder='.', page_number=None):
-    """Save the image data from an LTImage object, and return the file name,
-    if successful.
+    """Save the image data from an LTImage object in a given folder with a
+    self-generated filename and return the file name, if successful.
     
     Args:
         lt_image (LTImage): image object.
-        fullpathname (str): filename with path but withour extension where
-            the image is to be stored.
+        src_fullpath (str): filename with path from where the image was taken.
+        dst_folder (str): folder where the image is to be saved.
+        page_number (int, optional): number of the page from where the image
+            was taken.
     
     Returns:
         str: full path to the stored image.
@@ -57,8 +59,10 @@ def parseLtObjs(lt_objs, src_fullpath, page_number, dst_folder='.', options=DEFA
     
     Args:
         lt_objs (layout.LT*): layout object in a PDF page.
+        src_fullpath (str): filename with path which is to be parsed for text.
         page_number (int): the page number from where the lt_objs stem.
-        image_folder (str): the path where to store extracted images
+        dst_folder (str): the path where to store extracted images, if any.
+        options (ImportOptions): tuple holding various settings.
         text (list): a list of str to which to append the extracted text.
 
     Returns:

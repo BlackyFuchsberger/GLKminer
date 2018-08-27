@@ -11,6 +11,8 @@ Required Packages:
     Packages:
         opencv: Open Source Computer Vision Library
             (https://github.com/opencv/opencv)
+        kivy: Open source Python library for rapid development of applications
+            (https://github.com/kivy/kivy)
         pdfminer: Extract text from extractable PDF documents
             (https://github.com/pdfminer/pdfminer.six)
         pymongo: Python mongoDB driver
@@ -38,54 +40,24 @@ Database Backend:
 """
 
 # Python core modules and packages
-import logging, os
-
-# Preload local modules
-import lib.db_conf as dbc
-from lib.db_conf import dbconfig
-
-# Third party modules and packages
-if dbc.DB_USE_BACKEND == dbc.DB_BACKEND_MONGO:
-    from pymongo import MongoClient
-elif dbc.DB_USE_BACKEND == dbc.DB_BACKEND_SQLITE:
-    import sqlite3    # Currently nonfunctional
+import logging
 
 # Local modules and packages
+from gui.GLKminerApp import GLKminerApp
 import lib.constants as constants
-from lib.importing import importFolder
-from lib.import_conf import DEFAULT_IMPORTOPTIONS, DEFAULT_LOGNAME
-from lib.wordcloud_helper import createWordcloud
+
 
 # Toggle logging
 if constants.DEFAULT_LOGTOCONSOLE:
     logging.basicConfig(level=logging.INFO)
     for logname in ['pdfminer.pdfdocument','pdfminer.pdfpage','pdfminer.pdfinterp','pdfminer.converter','pdfminer.cmapdb']:
         logging.getLogger(logname).setLevel(logging.WARNING)
-logger = logging.getLogger(DEFAULT_LOGNAME)
 
+# Run the UI from where the currently implemented functions can be invoked
+app = GLKminerApp()
+app.run()
 
-# Establish connection to database
-client = MongoClient('mongodb://{0}:{1}@{2}:{3}/{4}'.format(dbconfig.username, dbconfig.password, dbconfig.host, dbconfig.port, dbconfig.name))
-db = client[dbconfig.name]
-
-
-# Populate database with content from PDF files
-if False:
-    count = importFolder(folder=os.path.join('..', 'Container', '01_InnovLP'), db=db.GLKM_innovativelehrprojekte)
-    logger.info('{0} files were imported from "01_InnovLP".'.format(count))
-    
-    count = importFolder(folder=os.path.join('..', 'Container', '02_LFS'), db=db.GLKM_lehrfreisemester)
-    logger.info('{0} files were imported from "02_LFS".'.format(count))
-
-
-# Create a wordcloud
-createWordcloud(
-        '.\\mywordcloud.png',
-        os.path.join(DEFAULT_IMPORTOPTIONS.imageFolder, 'cloud_template.png'),
-        filter={'content_source': {'$regex': 'text', '$options': 'i'}},
-        coll=db.GLKM_innovativelehrprojekte
-        )
-    
-
-# Cleanup
-client.close()
+# Beware that when run in IPython, the kivy framework produces an error on the
+# second and every further start of the app. To ensure proper function, the
+# console must be restarted before the next run.
+exit()

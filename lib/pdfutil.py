@@ -26,9 +26,10 @@ def savePDFPageAsImage(src_name, dst_folder, pages, filetype, resolution=DEFAULT
     
     Args:
         src_name (str): name of the PDF file.
+        dst_folder (str): folder to store the image file.
         pages (int|list): pages to save.
         filetype (str): extension indicating the image file format.
-        options (ImportOptions): tuple holding various settings.
+        resolution(int, optional): The resolution of the temporary image files.
 
     Returns:
         int: the number of saved files
