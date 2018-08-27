@@ -28,12 +28,14 @@ Required Packages:
         ImageMagick: Open Source image conversion tool. Note that as of August
             2018, wand only supports ImageMagick 6.
             (https://www.imagemagick.org/script/index.php)
+        MongoDB: noSQL database engine.
+            (https://www.mongodb.com)
         Tesseract: Open Source OCR framework
             (Windows installer: https://github.com/UB-Mannheim/tesseract/wiki)
 
 Database Backend:
     The framework runs on a mongoDB database backend. Settings are
-    configured in lib.db_settings.py.
+    configured in lib.db_conf.py.
 
 @author: Malte Persike
 """
