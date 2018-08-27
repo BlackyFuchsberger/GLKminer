@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 """Start the GLKminer framework (provisional).
 
-This is a very provisional file to call different modules of the GLKminer
-framework. The goal should be to provide a GUI from where GLKminer is run.
+This is a very provisional file to instantiate and start the GLKminer UI.
 
 Required Packages:
     A number of third party packages and binaries need to be installed for
